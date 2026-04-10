@@ -1,15 +1,3 @@
-// ============================================================
-//  URBAN SPATIAL MAP - script.js  (VERSI PERBAIKAN)
-//  Mata Kuliah: Grafika Komputer
-//
-//  PERBAIKAN UTAMA:
-//  1. Jalan dibuat dalam format VECTOR (SVG) → tidak pixelated saat zoom
-//  2. Jalan mayoritas diagonal & melengkung (Bezier curve + diagonal)
-//     Jalan lurus < 10% sesuai syarat PDF
-//  3. Semua jalan terhubung (graph connected) — tidak ada isolasi
-//  4. Pathfinding berbasis GRAPH VECTOR (bukan tile grid)
-//  5. Animasi mobil mengikuti kurva Bezier secara presisi (tidak drift)
-// ============================================================
 
 // ============================================================
 //  BAGIAN 1: KONFIGURASI GLOBAL
@@ -1080,31 +1068,3 @@ window.addEventListener('load', () => {
   hint.classList.remove('hidden');
 });
 
-// ============================================================
-//  RINGKASAN ARSITEKTUR
-//  ─────────────────────────────────────────────────────────
-//  LAYER STACK (z-order bawah ke atas):
-//    bgCanvas  → terrain, gedung, pohon (Canvas 2D, statis)
-//    roadSVG   → jalan vektor (SVG, selalu tajam di semua zoom)
-//    fgCanvas  → path BFS, marker, mobil (Canvas 2D, animasi)
-//
-//  GRAPH JALAN:
-//    nodes[]   → titik persimpangan {id, x, y}
-//    edges[]   → segmen jalan {a, b, type, cp1, cp2, pts, length}
-//    adjList{} → daftar tetangga tiap node (untuk Dijkstra)
-//
-//  GENERASI PETA:
-//    1. Grid jitter → node persimpangan tersebar merata tapi acak
-//    2. Prim MST    → jamin semua node terhubung
-//    3. Extra edges → menambah loop & variasi rute
-//    4. Tipe jalan  → 'curve' (Bezier, mayoritas), 'diagonal', 'straight' (<10%)
-//
-//  PATHFINDING:
-//    Dijkstra berbobot (bukan BFS) → jalur terpendek berdasarkan
-//    panjang jalan nyata (meter/piksel), bukan jumlah hop
-//
-//  ANIMASI:
-//    pathPoints[] → titik-titik halus hasil sample kurva Bezier
-//    Delta-time interpolation → kecepatan konstan tanpa tergantung fps
-//    Math.atan2(dy,dx) → rotasi mobil sinkron dengan arah jalur
-// ============================================================
