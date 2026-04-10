@@ -1,0 +1,402 @@
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-deep:      #0d0f14;
+  --bg-panel:     #13161e;
+  --bg-card:      #1a1e2a;
+  --bg-hover:     #222636;
+  --border:       #2a2f42;
+  --border-light: #363d56;
+
+  --accent:       #00e5ff;
+  --accent-dim:   #00b8cc;
+  --accent-glow:  rgba(0, 229, 255, 0.15);
+  --green:        #00e676;
+  --red:          #ff5252;
+  --yellow:       #ffd740;
+  --orange:       #ff9100;
+
+  --text-primary:   #e8ecf4;
+  --text-secondary: #8892a4;
+  --text-muted:     #4a5168;
+
+  --font-display: 'Courier New', 'Lucida Console', monospace;
+  --font-body:    'Segoe UI', system-ui, sans-serif;
+
+  --panel-w: 260px;
+  --header-h: 52px;
+  --radius:   8px;
+  --radius-lg: 12px;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.app-header {
+  height: var(--header-h);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  position: relative;
+  z-index: 10;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot.red    { background: #ff5f57; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green  { background: #28ca41; }
+
+.header-title h1 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+  margin-left: 4px;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.app-layout {
+  display: flex;
+  height: calc(100vh - var(--header-h));
+  overflow: hidden;
+}
+
+/* ============================================================
+   CONTROL PANEL
+   ============================================================ */
+.control-panel {
+  width: var(--panel-w);
+  min-width: var(--panel-w);
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+}
+
+.control-panel::-webkit-scrollbar { width: 4px; }
+.control-panel::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
+
+/* ============================================================
+   PANEL SECTION
+   ============================================================ */
+.panel-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.3px;
+}
+
+.btn svg {
+  width: 15px; height: 15px;
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0d0f14;
+  border-color: var(--accent);
+}
+.btn-primary:hover {
+  background: #33ecff;
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.btn-secondary:hover {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+}
+
+.btn-action {
+  background: var(--green);
+  color: #0d0f14;
+  border-color: var(--green);
+  font-size: 14px;
+}
+.btn-action:hover:not(:disabled) {
+  background: #33ff8a;
+  box-shadow: 0 0 16px rgba(0, 230, 118, 0.25);
+}
+.btn-action:disabled {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+.btn-action.paused {
+  background: var(--yellow);
+  border-color: var(--yellow);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+}
+.btn-outline:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+/* Zoom buttons */
+.zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-icon {
+  width: 36px; height: 36px;
+  min-width: 36px;
+  padding: 0;
+  justify-content: center;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+.btn-icon svg { width: 16px; height: 16px; }
+.btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+
+.zoom-display {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 4px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ============================================================
+   LEGEND
+   ============================================================ */
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legend-box {
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ============================================================
+   INFO BOX
+   ============================================================ */
+.info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.status-idle     { color: var(--text-muted); }
+.status-ready    { color: var(--green); }
+.status-running  { color: var(--accent); }
+.status-paused   { color: var(--yellow); }
+.status-done     { color: var(--orange); }
+
+.progress-bar-wrap {
+  height: 4px;
+  background: var(--bg-deep);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+/* ============================================================
+   CANVAS / MAP AREA  —  Tiga layer ditumpuk (stacked)
+   ============================================================ */
+.canvas-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #080a0f;
+  cursor: grab;
+}
+.canvas-wrapper:active { cursor: grabbing; }
+
+/* Semua layer pakai posisi absolut, origin 0 0 */
+#bgCanvas,
+#roadSVG,
+#fgCanvas {
+  position: absolute;
+  top: 0; left: 0;
+  transform-origin: 0 0;   /* pivot kiri-atas untuk zoom konsisten */
+}
+
+/* Canvas raster tetap pixel-crisp saat zoom kecil */
+#bgCanvas,
+#fgCanvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* SVG roads vector — tidak punya image-rendering, selalu tajam */
+#roadSVG {
+  overflow: visible;
+  pointer-events: none;   /* klik/drag tetap diterima canvas di bawah */
+}
+
+/* Hint overlay sebelum map digenerate */
+.canvas-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 20;
+}
+
+.canvas-hint::before {
+  content: '';
+  display: block;
+  width: 40px; height: 40px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto 12px;
+  animation: spin 1.5s linear infinite;
+}
+
+.canvas-hint.hidden { display: none; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
