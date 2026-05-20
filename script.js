@@ -1,326 +1,542 @@
-
 // ============================================================
 //  BAGIAN 1: KONFIGURASI GLOBAL
+//  Anggota 1 — refactor: JSDoc konstanta, rename variabel lokal
 // ============================================================
-
-const MAP_W  = 1400;   // Lebar peta dalam piksel (lebih besar dari viewport)
-const MAP_H  = 1100;   // Tinggi peta dalam piksel
-
-const ROAD_W = 18;     // Lebar jalan utama (piksel)
-const CAR_SPEED = 120; // Kecepatan mobil piksel/detik
-
-// Berapa banyak segmen jalan digenerate
-const NUM_NODES      = 28;   // Jumlah node persimpangan
-const NUM_EXTRA_CONN = 14;   // Koneksi tambahan agar graph lebih lebat
-
-// Batasan zona — jalan tidak dibuat di tepi peta
+ 
+/** Lebar total kanvas peta dalam piksel */
+const MAP_W = 1400;
+ 
+/** Tinggi total kanvas peta dalam piksel */
+const MAP_H = 1100;
+ 
+/** Lebar visual jalan utama dalam piksel */
+const ROAD_W = 18;
+ 
+/** Kecepatan gerak mobil (piksel per detik) */
+const CAR_SPEED = 120;
+ 
+/** Jumlah node persimpangan yang di-generate */
+const NUM_NODES = 28;
+ 
+/** Koneksi ekstra agar graph lebih bervariasi */
+const NUM_EXTRA_CONN = 14;
+ 
+/** Zona aman tepi peta — jalan tidak dibuat di sini */
 const MARGIN = 80;
-
+ 
 // ============================================================
 //  BAGIAN 2: STATE APLIKASI
 // ============================================================
-
-// Graph jalan (vektor):
-//   nodes[i] = { id, x, y }                    — titik persimpangan
-//   edges[i] = { id, a, b, pts, length, type }  — segmen jalan
-//     pts   = array titik [{x,y}] untuk animasi (disampling dari kurva)
-//     type  = 'straight' | 'diagonal' | 'curve'
+ 
+// Struktur graph jalan (vektor):
+//   nodes[i] = { id, x, y }                   — titik persimpangan
+//   edges[i] = { id, a, b, pts, length, type } — segmen jalan
+//     pts  = array titik [{x,y}] hasil sampling kurva Bezier
+//     type = 'straight' | 'diagonal' | 'curve'
+ 
+/** Daftar semua node (titik persimpangan) pada peta */
 let nodes = [];
+ 
+/** Daftar semua edge (segmen jalan) yang menghubungkan node */
 let edges = [];
-
-// Adjacency list untuk pathfinding
-//   adjList[nodeId] = [ {nodeId, edgeId, reversed}, ... ]
+ 
+/** Adjacency list: adjList[nodeId] = [{nodeId, edgeId, reversed}] */
 let adjList = {};
-
-// Start & End node id
+ 
+/** ID node titik awal perjalanan */
 let startId = null;
-let endId   = null;
-
-// Path hasil Dijkstra: array { edgeId, reversed }
+ 
+/** ID node titik akhir perjalanan */
+let endId = null;
+ 
+/** Jalur hasil Dijkstra berupa array {edgeId, reversed} */
 let pathEdges = [];
-// Path titik-titik halus untuk animasi
-let pathPoints = [];   // [{x,y}]
-
-// State animasi
-let animRunning  = false;
-let animPaused   = false;
-let animFrame    = null;
-let carPtIndex   = 0;
-let carX = 0, carY = 0;
+ 
+/** Titik-titik halus sepanjang jalur untuk animasi mobil [{x,y}] */
+let pathPoints = [];
+ 
+// --- State animasi ---
+/** true jika animasi mobil sedang aktif berjalan */
+let animRunning = false;
+ 
+/** true jika animasi sedang dijeda */
+let animPaused = false;
+ 
+/** ID frame requestAnimationFrame aktif, null jika tidak ada */
+let animFrame = null;
+ 
+/** Indeks titik pathPoints yang sedang dituju mobil */
+let carPtIndex = 0;
+ 
+/** Posisi X mobil saat ini dalam piksel */
+let carX = 0;
+ 
+/** Posisi Y mobil saat ini dalam piksel */
+let carY = 0;
+ 
+/** Sudut rotasi mobil dalam radian, dihitung dari Math.atan2 */
 let carAngle = 0;
+ 
+/** Timestamp (ms) dari frame animasi sebelumnya */
 let lastTime = 0;
-
-// State peta
+ 
+// --- State peta ---
+/** true jika peta sudah selesai di-generate */
 let mapReady = false;
+ 
+/** true jika posisi start/end sudah dipilih dan path siap */
 let posReady = false;
-
-// Kamera
-let camOffX  = 0;
-let camOffY  = 0;
+ 
+// --- State kamera ---
+/** Offset horizontal kamera terhadap viewport (piksel) */
+let camOffX = 0;
+ 
+/** Offset vertikal kamera terhadap viewport (piksel) */
+let camOffY = 0;
+ 
+/** Skala zoom kamera saat ini (1.0 = 100%) */
 let camScale = 1.0;
-const SCALE_MIN  = 0.25;
-const SCALE_MAX  = 4.0;
-const SCALE_STEP = 0.2;
-
-// Drag
-let isDragging  = false;
-let dragStartX  = 0;
-let dragStartY  = 0;
+ 
+/** Skala minimum yang diperbolehkan (diperbarui saat resize) */
+let SCALE_MIN = 0.25;
+ 
+/** Skala maksimum yang diperbolehkan */
+const SCALE_MAX = 4.0;
+ 
+/** Besar perubahan skala tiap satu langkah zoom */
+const SCALE_STEP = 0.1;
+ 
+// --- State drag/pan ---
+/** true jika pengguna sedang menekan dan menggeser peta */
+let isDragging = false;
+ 
+/** Posisi X kursor saat drag dimulai */
+let dragStartX = 0;
+ 
+/** Posisi Y kursor saat drag dimulai */
+let dragStartY = 0;
+ 
+/** Snapshot camOffX saat drag dimulai */
 let camOffXSnap = 0;
+ 
+/** Snapshot camOffY saat drag dimulai */
 let camOffYSnap = 0;
-
+ 
 // ============================================================
 //  BAGIAN 3: REFERENSI DOM
 // ============================================================
-
-const bgCanvas    = document.getElementById('bgCanvas');
-const bgCtx       = bgCanvas.getContext('2d');
-const fgCanvas    = document.getElementById('fgCanvas');
-const fgCtx       = fgCanvas.getContext('2d');
-const roadSVG     = document.getElementById('roadSVG');
-const wrapper     = document.getElementById('canvasWrapper');
-const hint        = document.getElementById('canvasHint');
-const btnStart    = document.getElementById('btnStartPause');
-const btnLabel    = document.getElementById('btnLabel');
-const iconPlay    = document.getElementById('iconPlay');
-const iconPause   = document.getElementById('iconPause');
-const zoomLabel   = document.getElementById('zoomLabel');
-const infoStatus  = document.getElementById('infoStatus');
-const infoPathLen = document.getElementById('infoPathLen');
-const infoRoadSegs= document.getElementById('infoRoadSegs');
-const infoProgress= document.getElementById('infoProgress');
-const progressBar = document.getElementById('progressBar');
-
+ 
+const bgCanvas     = document.getElementById('bgCanvas');
+const bgCtx        = bgCanvas.getContext('2d');
+const fgCanvas     = document.getElementById('fgCanvas');
+const fgCtx        = fgCanvas.getContext('2d');
+const roadSVG      = document.getElementById('roadSVG');
+const wrapper      = document.getElementById('canvasWrapper');
+const hint         = document.getElementById('canvasHint');
+const btnStart     = document.getElementById('btnStartPause');
+const btnLabel     = document.getElementById('btnLabel');
+const iconPlay     = document.getElementById('iconPlay');
+const iconPause    = document.getElementById('iconPause');
+const zoomLabel    = document.getElementById('zoomLabel');
+const infoStatus   = document.getElementById('infoStatus');
+const infoPathLen  = document.getElementById('infoPathLen');
+const infoRoadSegs = document.getElementById('infoRoadSegs');
+const infoProgress = document.getElementById('infoProgress');
+const progressBar  = document.getElementById('progressBar');
+ 
 // ============================================================
 //  BAGIAN 4: INISIALISASI LAYER
-//  Tiga layer (bgCanvas, roadSVG, fgCanvas) pakai ukuran sama
+//  Tiga layer (bgCanvas, roadSVG, fgCanvas) menggunakan ukuran
+//  yang sama persis agar overlay saling sejajar.
 // ============================================================
-
+ 
+/**
+ * Menginisialisasi ukuran ketiga layer (bgCanvas, roadSVG, fgCanvas)
+ * sesuai MAP_W x MAP_H, lalu memusatkan kamera di tengah viewport.
+ */
 function initLayers() {
-  [bgCanvas, fgCanvas].forEach(c => {
-    c.width  = MAP_W;
-    c.height = MAP_H;
+  // Atur ukuran kedua canvas raster agar sama
+  [bgCanvas, fgCanvas].forEach(canvas => {
+    canvas.width  = MAP_W;
+    canvas.height = MAP_H;
   });
+ 
+  // Atur ukuran SVG roads agar sejajar dengan canvas
   roadSVG.setAttribute('width',  MAP_W);
   roadSVG.setAttribute('height', MAP_H);
   roadSVG.setAttribute('viewBox', `0 0 ${MAP_W} ${MAP_H}`);
-
-  // Pusatkan kamera
-  const ww = wrapper.clientWidth;
-  const wh = wrapper.clientHeight;
-  camOffX = (ww - MAP_W * camScale) / 2;
-  camOffY = (wh - MAP_H * camScale) / 2;
-  applyTransform();
+ 
+  // Pusatkan peta di tengah viewport saat pertama dibuka
+  const viewportW = wrapper.clientWidth;
+  const viewportH = wrapper.clientHeight;
+  camOffX = (viewportW - MAP_W * camScale) / 2;
+  camOffY = (viewportH - MAP_H * camScale) / 2;
+ 
+  updateMinScale();
 }
-
+ 
+/**
+ * Menerapkan CSS transform (translate + scale) ke ketiga layer sekaligus.
+ * Dipanggil setiap kali posisi atau skala kamera berubah.
+ */
 function applyTransform() {
-  const t = `translate(${camOffX}px, ${camOffY}px) scale(${camScale})`;
-  bgCanvas.style.transform = t;
-  roadSVG.style.transform  = t;
-  fgCanvas.style.transform = t;
+  clampCamera();
+ 
+  const transformStr = `translate(${camOffX}px, ${camOffY}px) scale(${camScale})`;
+  bgCanvas.style.transform = transformStr;
+  roadSVG.style.transform  = transformStr;
+  fgCanvas.style.transform = transformStr;
+ 
   zoomLabel.textContent = Math.round(camScale * 100) + '%';
 }
-
+ 
+/**
+ * Menghitung ulang skala minimum agar peta tidak mengecil terlalu jauh,
+ * lalu memusatkan kembali kamera.
+ */
+function updateMinScale() {
+  const viewportW = wrapper.clientWidth;
+  const viewportH = wrapper.clientHeight;
+ 
+  // Kunci skala minimum di 0.35 agar peta selalu terbaca
+  SCALE_MIN = 0.35;
+  if (camScale < SCALE_MIN) camScale = SCALE_MIN;
+ 
+  camOffX = (viewportW - MAP_W * camScale) / 2;
+  camOffY = (viewportH - MAP_H * camScale) / 2;
+ 
+  applyTransform();
+}
+ 
+/**
+ * Membatasi offset kamera agar peta tidak bisa digeser keluar viewport.
+ * Jika peta lebih kecil dari viewport, peta diposisikan di tengah.
+ */
+function clampCamera() {
+  const viewportW = wrapper.clientWidth;
+  const viewportH = wrapper.clientHeight;
+ 
+  const scaledW = MAP_W * camScale;
+  const scaledH = MAP_H * camScale;
+ 
+  // Batas horizontal
+  if (scaledW <= viewportW) {
+    camOffX = (viewportW - scaledW) / 2;
+  } else {
+    const minOffX = viewportW - scaledW;
+    const maxOffX = 0;
+    camOffX = Math.min(maxOffX, Math.max(minOffX, camOffX));
+  }
+ 
+  // Batas vertikal
+  if (scaledH <= viewportH) {
+    camOffY = (viewportH - scaledH) / 2;
+  } else {
+    const minOffY = viewportH - scaledH;
+    const maxOffY = 0;
+    camOffY = Math.min(maxOffY, Math.max(minOffY, camOffY));
+  }
+}
+ 
 // ============================================================
 //  BAGIAN 5: GENERATE MAP — Graph Berbasis Vektor
 //
-//  Algoritma:
-//  1. Scatter node-node persimpangan secara acak (dengan grid jitter
-//     agar tidak terlalu menumpuk)
-//  2. Bangun Minimum Spanning Tree (Prim) agar semua terhubung
-//  3. Tambahkan koneksi extra untuk membuat loop dan variasi rute
-//  4. Untuk setiap edge, tentukan tipe jalan:
-//       - diagonal  : jika sudut ~45° (bukan 0°/90°)
-//       - curve     : lengkung Bezier kubik dengan kontrol acak
-//       - straight  : hanya sebagian kecil (<10%)
-//  5. Sample titik-titik sepanjang kurva untuk pathfinding & animasi
+//  Langkah-langkah pembangunan graph:
+//  1. Buat node grid organik (6 kolom x 5 baris) dengan jitter acak
+//  2. Hubungkan node secara horizontal (kiri-kanan)
+//  3. Hubungkan node secara vertikal (atas-bawah)
+//  4. Tambahkan koneksi diagonal acak untuk membentuk loop
+//  5. Tambahkan koneksi random ekstra untuk variasi rute
+//  6. Hitung dan tampilkan statistik jalan
+//  7. Render semua layer
 // ============================================================
-
+ 
+/**
+ * Men-generate peta jalan baru secara acak.
+ * Mereset seluruh state graph, lalu membangun ulang dan merender.
+ */
 function generateMap() {
   stopAnimation();
-  mapReady = false;
-  posReady = false;
-  startId  = null;
-  endId    = null;
+ 
+  // Reset seluruh state sebelum generate ulang
+  mapReady   = false;
+  posReady   = false;
+  startId    = null;
+  endId      = null;
   pathEdges  = [];
   pathPoints = [];
-
-  // --- 5a. Generate nodes (grid jitter) ---
-  nodes = [];
-  const GCOLS = 7, GROWS = 5;
-  const cellW = (MAP_W - MARGIN * 2) / GCOLS;
-  const cellH = (MAP_H - MARGIN * 2) / GROWS;
-
-  for (let gr = 0; gr < GROWS; gr++) {
-    for (let gc = 0; gc < GCOLS; gc++) {
-      // Jitter dalam cell agar posisi tidak seragam
-      const jx = (Math.random() * 0.7 + 0.15) * cellW;
-      const jy = (Math.random() * 0.7 + 0.15) * cellH;
+  nodes      = [];
+  edges      = [];
+  adjList    = {};
+ 
+  // ── 1. Buat node grid organik ────────────────────────────
+  const COLS = 6;
+  const ROWS = 5;
+ 
+  const spacingX = (MAP_W - MARGIN * 2) / (COLS - 1);
+  const spacingY = (MAP_H - MARGIN * 2) / (ROWS - 1);
+ 
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      // Jitter acak agar grid tidak terlalu kaku
+      const jitterX = (Math.random() - 0.5) * 90;
+      const jitterY = (Math.random() - 0.5) * 90;
+ 
       nodes.push({
         id: nodes.length,
-        x: MARGIN + gc * cellW + jx,
-        y: MARGIN + gr * cellH + jy
+        x: MARGIN + col * spacingX + jitterX,
+        y: MARGIN + row * spacingY + jitterY
       });
     }
   }
-
-  // Tambah beberapa node ekstra acak di area tengah
-  for (let i = 0; i < 8; i++) {
-    nodes.push({
-      id: nodes.length,
-      x: MARGIN + Math.random() * (MAP_W - MARGIN * 2),
-      y: MARGIN + Math.random() * (MAP_H - MARGIN * 2)
-    });
-  }
-
-  // --- 5b. Minimum Spanning Tree (Prim) agar semua node terhubung ---
-  edges = [];
-  adjList = {};
-  nodes.forEach(n => adjList[n.id] = []);
-
-  const inMST = new Set([0]);
-  while (inMST.size < nodes.length) {
-    let bestDist = Infinity, bestA = -1, bestB = -1;
-    for (const a of inMST) {
-      for (let b = 0; b < nodes.length; b++) {
-        if (inMST.has(b)) continue;
-        const d = dist(nodes[a], nodes[b]);
-        if (d < bestDist) { bestDist = d; bestA = a; bestB = b; }
-      }
+ 
+  // Inisialisasi adjacency list kosong untuk setiap node
+  nodes.forEach(n => { adjList[n.id] = []; });
+ 
+  // ── 2. Koneksi horizontal (kiri → kanan per baris) ───────
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS - 1; col++) {
+      addLoopRoad(row * COLS + col, row * COLS + col + 1);
     }
-    addEdge(bestA, bestB);
-    inMST.add(bestB);
   }
-
-  // --- 5c. Tambah koneksi extra (loop & variasi rute) ---
-  //  Pilih pasangan node yang belum terhubung langsung & jaraknya wajar
-  const maxExtraDist = Math.max(MAP_W, MAP_H) * 0.42;
-  let extraCount = 0;
-  const shuffled = [...nodes].sort(() => Math.random() - 0.5);
-  for (let i = 0; i < shuffled.length && extraCount < NUM_EXTRA_CONN; i++) {
-    for (let j = i + 1; j < shuffled.length && extraCount < NUM_EXTRA_CONN; j++) {
-      const a = shuffled[i].id, b = shuffled[j].id;
-      if (isDirectlyConnected(a, b)) continue;
-      const d = dist(nodes[a], nodes[b]);
-      if (d < maxExtraDist && Math.random() < 0.55) {
-        addEdge(a, b);
-        extraCount++;
+ 
+  // ── 3. Koneksi vertikal (atas → bawah per kolom) ─────────
+  for (let col = 0; col < COLS; col++) {
+    for (let row = 0; row < ROWS - 1; row++) {
+      addLoopRoad(row * COLS + col, (row + 1) * COLS + col);
+    }
+  }
+ 
+  // ── 4. Koneksi diagonal acak (membentuk loop organik) ────
+  for (let row = 0; row < ROWS - 1; row++) {
+    for (let col = 0; col < COLS - 1; col++) {
+      if (Math.random() < 0.45) {
+        addLoopRoad(row * COLS + col, (row + 1) * COLS + (col + 1));
       }
     }
   }
-
-  // --- 5d. Hitung statistik jalan ---
-  const types = edges.map(e => e.type);
-  const nStraight = types.filter(t => t === 'straight').length;
-  const pct = Math.round((nStraight / edges.length) * 100);
-  infoRoadSegs.textContent = `${edges.length} (${pct}% lurus)`;
-
-  // --- 5e. Render semua layer ---
+ 
+  // ── 5. Koneksi random tambahan ───────────────────────────
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const nodeA = Math.floor(Math.random() * nodes.length);
+    const nodeB = Math.floor(Math.random() * nodes.length);
+ 
+    if (nodeA === nodeB) continue;
+    if (isDirectlyConnected(nodeA, nodeB)) continue;
+    if (getNodeDegree(nodeA) >= 4) continue;
+    if (getNodeDegree(nodeB) >= 4) continue;
+ 
+    if (dist(nodes[nodeA], nodes[nodeB]) < 320) {
+      addLoopRoad(nodeA, nodeB);
+    }
+  }
+ 
+  // ── 6. Statistik jalan ───────────────────────────────────
+  const jumlahLurus = edges.filter(e => e.type === 'straight').length;
+  const persenLurus = Math.round((jumlahLurus / edges.length) * 100);
+  infoRoadSegs.textContent = `${edges.length} (${persenLurus}% lurus)`;
+ 
+  // ── 7. Render semua layer ────────────────────────────────
   drawBackground();
   drawRoadsSVG();
   drawForeground();
-
+ 
   mapReady = true;
   hint.classList.add('hidden');
   setStatus('Map Ready', 'status-ready');
   updateUI();
 }
-
-// -------- Helper: tambah edge antara node a dan b --------
-function addEdge(aId, bId) {
-  const na = nodes[aId], nb = nodes[bId];
-  const edgeId = edges.length;
-
-  // Tentukan tipe jalan berdasarkan sudut
-  const dx = nb.x - na.x;
-  const dy = nb.y - na.y;
-  const angle = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
-  // angle ~0 atau ~180 = horizontal, ~90 = vertikal → straight
-  // angle ~45 atau ~135 → diagonal
-  const isHV = (angle < 18 || angle > 162 || (angle > 72 && angle < 108));
-
-  let type;
-  const r = Math.random();
-  if (isHV && r < 0.15) {
-    // Hanya 15% dari jalan H/V yang benar-benar lurus
-    type = 'straight';
-  } else if (!isHV && r < 0.35) {
-    // Jalan diagonal (tidak diberi lengkung, sudut alami)
-    type = 'diagonal';
-  } else {
-    // Mayoritas: lengkung Bezier
-    type = 'curve';
+ 
+// ============================================================
+//  ROAD ORGANIK — Bezier Kubik Natural
+//  Setiap edge diberi lekukan acak menggunakan vektor tegak lurus
+// ============================================================
+ 
+/**
+ * Menambahkan edge jalan kurva Bezier antara dua node.
+ * Arah dan besar lekukan ditentukan secara acak.
+ * @param {number} aId - ID node awal
+ * @param {number} bId - ID node akhir
+ */
+function addLoopRoad(aId, bId) {
+  const na = nodes[aId];
+  const nb = nodes[bId];
+ 
+  // Validasi: tidak boleh duplikat atau melebihi degree maksimum
+  if (isDirectlyConnected(aId, bId)) return;
+  if (getNodeDegree(aId) >= 4) return;
+  if (getNodeDegree(bId) >= 4) return;
+ 
+  const dx  = nb.x - na.x;
+  const dy  = nb.y - na.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+ 
+  // Titik tengah segmen (tidak dipakai langsung, hanya referensi)
+  const mx = (na.x + nb.x) / 2;
+  const my = (na.y + nb.y) / 2;
+ 
+  // Vektor tegak lurus (normal) untuk arah lekukan
+  const nx = -dy / len;
+  const ny =  dx / len;
+ 
+  // Besar lekukan proporsional panjang segmen, arah acak (+ atau -)
+  const bend = (Math.random() * 0.25 + 0.08) * len * (Math.random() < 0.5 ? 1 : -1);
+ 
+  // Titik kontrol Bezier kubik: cp1 di 25%, cp2 di 75% sepanjang segmen
+  const cp1 = {
+    x: na.x + dx * 0.25 + nx * bend,
+    y: na.y + dy * 0.25 + ny * bend
+  };
+  const cp2 = {
+    x: na.x + dx * 0.75 + nx * bend,
+    y: na.y + dy * 0.75 + ny * bend
+  };
+ 
+  const pts = sampleCurve(na, nb, cp1, cp2, 'curve');
+ 
+  // Hitung panjang total edge dari titik-titik sample
+  let totalLength = 0;
+  for (let i = 1; i < pts.length; i++) {
+    totalLength += dist(pts[i - 1], pts[i]);
   }
-
-  // Buat titik kontrol kurva Bezier (untuk tipe 'curve')
-  let cp1 = null, cp2 = null;
-  if (type === 'curve') {
-    // Kontrol acak: geser tegak lurus dari midpoint
-    const mx = (na.x + nb.x) / 2;
-    const my = (na.y + nb.y) / 2;
-    const len = dist(na, nb);
-    // Vektor tegak lurus
-    const nx_ = -dy / len, ny_ = dx / len;
-    const bend = (Math.random() * 0.35 + 0.1) * len * (Math.random() < 0.5 ? 1 : -1);
-    // Dua kontrol point terpisah agar lebih organik
-    const split = 0.3 + Math.random() * 0.4;
+ 
+  const edgeId = edges.length;
+  edges.push({ id: edgeId, a: aId, b: bId, cp1, cp2, pts, length: totalLength, type: 'curve' });
+ 
+  // Daftarkan ke adjacency list dua arah
+  adjList[aId].push({ nodeId: bId, edgeId, reversed: false });
+  adjList[bId].push({ nodeId: aId, edgeId, reversed: true  });
+}
+ 
+/**
+ * Menambahkan edge dengan penentuan tipe jalan otomatis
+ * berdasarkan sudut antara dua node (straight/diagonal/curve).
+ * @param {number} aId - ID node awal
+ * @param {number} bId - ID node akhir
+ */
+function addEdge(aId, bId) {
+  const na = nodes[aId];
+  const nb = nodes[bId];
+ 
+  const dx    = nb.x - na.x;
+  const dy    = nb.y - na.y;
+  const angle = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
+ 
+  // Jalan horizontal/vertikal jika sudut mendekati 0°, 90°, atau 180°
+  const isHV = (angle < 18 || angle > 162 || (angle > 72 && angle < 108));
+ 
+  // Tentukan tipe jalan berdasarkan sudut dan probabilitas acak
+  let roadType;
+  const roll = Math.random();
+  if (isHV && roll < 0.15) {
+    roadType = 'straight';   // 15% jalan H/V dibuat lurus
+  } else if (!isHV && roll < 0.35) {
+    roadType = 'diagonal';   // 35% jalan diagonal tanpa lengkung
+  } else {
+    roadType = 'curve';      // Sisanya lengkung Bezier
+  }
+ 
+  // Buat titik kontrol hanya untuk tipe curve
+  let cp1 = null;
+  let cp2 = null;
+  if (roadType === 'curve') {
+    const midX  = (na.x + nb.x) / 2;
+    const midY  = (na.y + nb.y) / 2;
+    const segLen = dist(na, nb);
+    const normalX = -dy / segLen;
+    const normalY =  dx / segLen;
+    const bendAmt = (Math.random() * 0.35 + 0.1) * segLen * (Math.random() < 0.5 ? 1 : -1);
+    const split   = 0.3 + Math.random() * 0.4;
+ 
     cp1 = {
-      x: na.x + (mx - na.x) * split * 2 + nx_ * bend * 0.6,
-      y: na.y + (my - na.y) * split * 2 + ny_ * bend * 0.6
+      x: na.x + (midX - na.x) * split * 2 + normalX * bendAmt * 0.6,
+      y: na.y + (midY - na.y) * split * 2 + normalY * bendAmt * 0.6
     };
     cp2 = {
-      x: nb.x - (nb.x - mx) * (1 - split) * 2 + nx_ * bend * 0.9,
-      y: nb.y - (nb.y - my) * (1 - split) * 2 + ny_ * bend * 0.9
+      x: nb.x - (nb.x - midX) * (1 - split) * 2 + normalX * bendAmt * 0.9,
+      y: nb.y - (nb.y - midY) * (1 - split) * 2 + normalY * bendAmt * 0.9
     };
   }
-
-  // Sample titik sepanjang kurva untuk animasi & panjang
-  const pts = sampleCurve(na, nb, cp1, cp2, type);
-  let length = 0;
-  for (let i = 1; i < pts.length; i++) length += dist(pts[i-1], pts[i]);
-
-  const edge = { id: edgeId, a: aId, b: bId, cp1, cp2, pts, length, type };
-  edges.push(edge);
-
-  // Update adjacency list (dua arah)
+ 
+  const pts = sampleCurve(na, nb, cp1, cp2, roadType);
+  let edgeLen = 0;
+  for (let i = 1; i < pts.length; i++) edgeLen += dist(pts[i - 1], pts[i]);
+ 
+  const edgeId = edges.length;
+  edges.push({ id: edgeId, a: aId, b: bId, cp1, cp2, pts, length: edgeLen, type: roadType });
+ 
   adjList[aId].push({ nodeId: bId, edgeId, reversed: false });
-  adjList[bId].push({ nodeId: aId, edgeId, reversed: true });
+  adjList[bId].push({ nodeId: aId, edgeId, reversed: true  });
 }
-
-// -------- Helper: cek apakah dua node sudah langsung terhubung --------
+ 
+/**
+ * Mengembalikan jumlah koneksi (degree) sebuah node.
+ * @param {number} nodeId
+ * @returns {number}
+ */
+function getNodeDegree(nodeId) {
+  return adjList[nodeId] ? adjList[nodeId].length : 0;
+}
+ 
+/**
+ * Mengecek apakah dua node sudah terhubung langsung oleh sebuah edge.
+ * @param {number} a - ID node pertama
+ * @param {number} b - ID node kedua
+ * @returns {boolean}
+ */
 function isDirectlyConnected(a, b) {
-  return adjList[a] && adjList[a].some(e => e.nodeId === b);
+  return adjList[a] && adjList[a].some(entry => entry.nodeId === b);
 }
-
-// -------- Sample titik sepanjang kurva --------
-//  Menghasilkan array {x,y} dengan jarak antar titik ~5px
+ 
+/**
+ * Meng-sample titik-titik {x,y} sepanjang kurva Bezier kubik atau garis lurus.
+ * Menghasilkan 61 titik (STEPS=60) dari t=0 hingga t=1.
+ *
+ * Rumus Bezier Kubik:
+ *   B(t) = (1-t)³·P0 + 3(1-t)²t·P1 + 3(1-t)t²·P2 + t³·P3
+ *
+ * @param {{x:number,y:number}} na  - titik awal (P0)
+ * @param {{x:number,y:number}} nb  - titik akhir (P3)
+ * @param {{x:number,y:number}|null} cp1 - titik kontrol pertama (P1)
+ * @param {{x:number,y:number}|null} cp2 - titik kontrol kedua (P2)
+ * @param {string} type - 'curve' | 'straight' | 'diagonal'
+ * @returns {{x:number,y:number}[]}
+ */
 function sampleCurve(na, nb, cp1, cp2, type) {
-  const pts = [];
+  const pts   = [];
   const STEPS = 60;
+ 
   for (let i = 0; i <= STEPS; i++) {
     const t = i / STEPS;
     let x, y;
+ 
     if (type === 'curve' && cp1 && cp2) {
-      // Bezier kubik
+      // Interpolasi Bezier kubik
       const mt = 1 - t;
       x = mt*mt*mt*na.x + 3*mt*mt*t*cp1.x + 3*mt*t*t*cp2.x + t*t*t*nb.x;
       y = mt*mt*mt*na.y + 3*mt*mt*t*cp1.y + 3*mt*t*t*cp2.y + t*t*t*nb.y;
     } else {
-      // Linear (straight / diagonal)
+      // Interpolasi linear untuk straight / diagonal
       x = na.x + t * (nb.x - na.x);
       y = na.y + t * (nb.y - na.y);
     }
+ 
     pts.push({ x, y });
   }
   return pts;
 }
-
-// -------- Euclidean distance --------
+ 
+/**
+ * Menghitung jarak Euclidean antara dua titik 2D.
+ * @param {{x:number,y:number}} a - titik pertama
+ * @param {{x:number,y:number}} b - titik kedua
+ * @returns {number} jarak dalam piksel
+ */
 function dist(a, b) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  return Math.sqrt(dx*dx + dy*dy);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
-
 // ============================================================
 //  BAGIAN 6: RENDER LAYER BG — Latar (terrain + gedung + taman)
 //
