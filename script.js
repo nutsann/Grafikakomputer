@@ -1227,49 +1227,91 @@ function randomPosition() {
 //
 //  Cara Kerja:
 //  1. Inisialisasi dist[semua] = Infinity, dist[start] = 0
-//  2. Masukkan start ke priority queue (min-heap sederhana)
+//  2. Masukkan start ke priority queue (min-heap biner)
 //  3. Ambil node dengan dist terkecil
 //  4. Eksplorasi semua tetangga via adjList
 //  5. Jika dist[tetangga] bisa diperkecil, update & masukkan queue
 //  6. Rekonstruksi jalur via parentMap saat end ditemukan
 // ============================================================
-
+ 
+// -------- Min-Heap sederhana untuk priority queue Dijkstra --------
+// Jauh lebih efisien dari Array.sort() O(n log n) per iterasi.
+// Heap insert/extract = O(log n).
+class MinHeap {
+  constructor() { this._data = []; }
+ 
+  push(item) {
+    this._data.push(item);
+    this._bubbleUp(this._data.length - 1);
+  }
+ 
+  pop() {
+    const top  = this._data[0];
+    const last = this._data.pop();
+    if (this._data.length > 0) {
+      this._data[0] = last;
+      this._sinkDown(0);
+    }
+    return top;
+  }
+ 
+  get size() { return this._data.length; }
+ 
+  _bubbleUp(i) {
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (this._data[parent].d <= this._data[i].d) break;
+      [this._data[parent], this._data[i]] = [this._data[i], this._data[parent]];
+      i = parent;
+    }
+  }
+ 
+  _sinkDown(i) {
+    const n = this._data.length;
+    while (true) {
+      let smallest = i;
+      const l = 2 * i + 1, r = 2 * i + 2;
+      if (l < n && this._data[l].d < this._data[smallest].d) smallest = l;
+      if (r < n && this._data[r].d < this._data[smallest].d) smallest = r;
+      if (smallest === i) break;
+      [this._data[smallest], this._data[i]] = [this._data[i], this._data[smallest]];
+      i = smallest;
+    }
+  }
+}
+ 
 function dijkstra(startNodeId, endNodeId) {
-  const distMap    = {};
-  const parentMap  = {};  // parentMap[nodeId] = { fromNodeId, edgeId, reversed }
-  const visited    = new Set();
-
-  nodes.forEach(n => distMap[n.id] = Infinity);
+  const distMap   = {};
+  const parentMap = {}; // parentMap[nodeId] = { fromNodeId, edgeId, reversed }
+  const visited   = new Set();
+ 
+  nodes.forEach(n => { distMap[n.id] = Infinity; });
   distMap[startNodeId] = 0;
-
-  // Priority queue sederhana (array + sort)
-  // Untuk graph kecil ini sudah cukup efisien
-  const pq = [{ nodeId: startNodeId, d: 0 }];
-
-  while (pq.length > 0) {
-    // Ambil node dengan jarak terkecil
-    pq.sort((a, b) => a.d - b.d);
-    const { nodeId: cur } = pq.shift();
-
+ 
+  const pq = new MinHeap();
+  pq.push({ nodeId: startNodeId, d: 0 });
+ 
+  while (pq.size > 0) {
+    const { nodeId: cur } = pq.pop();
+ 
     if (visited.has(cur)) continue;
     visited.add(cur);
-
+ 
     if (cur === endNodeId) break;
-
+ 
     for (const { nodeId: next, edgeId, reversed } of (adjList[cur] || [])) {
       if (visited.has(next)) continue;
-      const edgeLen = edges[edgeId].length;
-      const newDist = distMap[cur] + edgeLen;
+      const newDist = distMap[cur] + edges[edgeId].length;
       if (newDist < distMap[next]) {
-        distMap[next] = newDist;
+        distMap[next]  = newDist;
         parentMap[next] = { fromNodeId: cur, edgeId, reversed };
         pq.push({ nodeId: next, d: newDist });
       }
     }
   }
-
+ 
   if (distMap[endNodeId] === Infinity) return null;
-
+ 
   // Rekonstruksi jalur edge dari end → start, lalu balik
   const edgePath = [];
   let cur = endNodeId;
@@ -1282,22 +1324,40 @@ function dijkstra(startNodeId, endNodeId) {
   edgePath.reverse();
   return { edgePath, totalDist: distMap[endNodeId] };
 }
-
-// -------- Bangun array titik halus dari array edge path --------
+ 
+// -------- Bangun array titik halus + tabel jarak kumulatif --------
+//
+// Mengembalikan array pts (sama seperti versi lama) agar semua
+// pemanggil di bagian 9 tidak perlu diubah.
+//
+// Sebagai efek samping, mengisi variabel global `pathCumDist`:
+//   pathCumDist[i] = total jarak dari pts[0] ke pts[i] (piksel)
+// Dipakai animLoop untuk menghitung progress bar yang akurat
+// berdasarkan jarak tempuh nyata, bukan sekadar indeks titik.
 function buildPathPoints(edgePath) {
   const pts = [];
+  pathCumDist = [0]; // reset & isi ulang variabel global
+ 
   for (const { edgeId, reversed } of edgePath) {
-    const e = edges[edgeId];
+    const e      = edges[edgeId];
     const segPts = reversed ? [...e.pts].reverse() : e.pts;
+ 
     // Hindari duplikat titik di persimpangan
-    const start = pts.length > 0 ? 1 : 0;
-    for (let i = start; i < segPts.length; i++) {
+    const startIdx = pts.length > 0 ? 1 : 0;
+    for (let i = startIdx; i < segPts.length; i++) {
+      if (pts.length > 0) {
+        const prev = pts[pts.length - 1];
+        const dx   = segPts[i].x - prev.x;
+        const dy   = segPts[i].y - prev.y;
+        pathCumDist.push(pathCumDist[pathCumDist.length - 1] + Math.sqrt(dx*dx + dy*dy));
+      }
       pts.push(segPts[i]);
     }
   }
-  return pts;
+ 
+  return pts; // tetap array biasa agar bagian 9 tidak perlu diubah
 }
-
+ 
 // ============================================================
 //  BAGIAN 11: ANIMASI MOBIL
 //
@@ -1308,134 +1368,150 @@ function buildPathPoints(edgePath) {
 //
 //  Sudut rotasi dihitung dari Math.atan2(dy, dx) — mobil selalu
 //  menghadap arah jalur (tidak drift).
+//
+//  Progress bar berbasis jarak kumulatif (cumDist) sehingga
+//  akurat dan tidak loncat-loncat.
 // ============================================================
-
+ 
 function startAnimation() {
   if (!posReady || pathPoints.length < 2) return;
-
+ 
   if (animPaused) {
     animPaused  = false;
     animRunning = true;
-    lastTime = performance.now();
-    animFrame = requestAnimationFrame(animLoop);
+    lastTime    = performance.now();
+    animFrame   = requestAnimationFrame(animLoop);
   } else {
     carPtIndex  = 0;
-    carX = pathPoints[0].x;
-    carY = pathPoints[0].y;
+    carX        = pathPoints[0].x;
+    carY        = pathPoints[0].y;
+    // Arahkan mobil ke titik berikutnya sejak awal agar tidak
+    // muncul dengan orientasi default (hadap kanan) lalu berputar.
+    if (pathPoints.length >= 2) {
+      const dx = pathPoints[1].x - pathPoints[0].x;
+      const dy = pathPoints[1].y - pathPoints[0].y;
+      carAngle  = Math.atan2(dy, dx);
+    }
     animRunning = true;
     animPaused  = false;
-    lastTime = performance.now();
-    animFrame = requestAnimationFrame(animLoop);
+    lastTime    = performance.now();
+    animFrame   = requestAnimationFrame(animLoop);
   }
   updateUI();
 }
-
+ 
 function pauseAnimation() {
   animRunning = false;
   animPaused  = true;
   if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = null;
   setStatus('Paused', 'status-paused');
   updateUI();
 }
-
+ 
 function stopAnimation() {
   animRunning = false;
   animPaused  = false;
   if (animFrame) cancelAnimationFrame(animFrame);
   animFrame = null;
 }
-
+ 
 function animLoop(timestamp) {
   if (!animRunning) return;
-
-  const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // Cap dt agar tidak lompat
-  lastTime = timestamp;
-
-  // Jika sudah sampai akhir path
+ 
+  // Cap dt: maks 50ms agar tidak lompat setelah tab di-background
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime  = timestamp;
+ 
+  // Sudah sampai akhir path
   if (carPtIndex >= pathPoints.length - 1) {
-    carX = pathPoints[pathPoints.length - 1].x;
-    carY = pathPoints[pathPoints.length - 1].y;
+    carX        = pathPoints[pathPoints.length - 1].x;
+    carY        = pathPoints[pathPoints.length - 1].y;
     animRunning = false;
     setStatus('Arrived!', 'status-done');
-    updateProgressBar(100);
-    infoProgress.textContent = '100%';
+    _updateProgress(100);
     drawForeground();
     updateUI();
     return;
   }
-
+ 
   // Gerakkan mobil: konsumsi "jarak" sebesar CAR_SPEED * dt
   let remaining = CAR_SPEED * dt;
-
+ 
   while (remaining > 0 && carPtIndex < pathPoints.length - 1) {
     const target = pathPoints[carPtIndex + 1];
-    const dx = target.x - carX;
-    const dy = target.y - carY;
-    const d  = Math.sqrt(dx*dx + dy*dy);
-
+    const dx     = target.x - carX;
+    const dy     = target.y - carY;
+    const d      = Math.sqrt(dx*dx + dy*dy);
+ 
     if (d < 0.001) { carPtIndex++; continue; }
-
+ 
     // Update sudut (arah hadap mobil)
     carAngle = Math.atan2(dy, dx);
-
+ 
     if (remaining >= d) {
-      // Lompat ke titik berikutnya
       carX = target.x;
       carY = target.y;
       carPtIndex++;
       remaining -= d;
     } else {
-      // Gerak sebagian menuju titik berikutnya
       carX += (dx / d) * remaining;
       carY += (dy / d) * remaining;
       remaining = 0;
     }
   }
-
-  // Update progress bar
-  const prog = Math.round((carPtIndex / (pathPoints.length - 1)) * 100);
-  infoProgress.textContent = prog + '%';
-  updateProgressBar(prog);
-
+ 
+  // Progress berbasis jarak kumulatif — akurat meski titik tidak equidistant
+  const totalDist = pathCumDist[pathCumDist.length - 1];
+  const traveled  = pathCumDist[Math.min(carPtIndex, pathCumDist.length - 1)];
+  const pct       = totalDist > 0 ? Math.round((traveled / totalDist) * 100) : 0;
+  _updateProgress(pct);
+ 
   drawForeground();
   animFrame = requestAnimationFrame(animLoop);
 }
-
+ 
+// Helper internal agar tidak duplikasi kode update progress
+function _updateProgress(pct) {
+  infoProgress.textContent = pct + '%';
+  updateProgressBar(pct);
+}
+ 
 // ============================================================
 //  BAGIAN 12: UI UPDATE
 // ============================================================
-
+ 
 function updateUI() {
   if (!posReady) {
-    btnStart.disabled = true;
-    btnLabel.textContent = 'Start';
-    iconPlay.style.display  = 'block';
-    iconPause.style.display = 'none';
+    btnStart.disabled        = true;
+    btnLabel.textContent     = 'Start';
+    iconPlay.style.display   = 'block';
+    iconPause.style.display  = 'none';
     btnStart.classList.remove('paused');
   } else if (animRunning) {
-    btnStart.disabled = false;
-    btnLabel.textContent = 'Pause';
-    iconPlay.style.display  = 'none';
-    iconPause.style.display = 'block';
+    btnStart.disabled        = false;
+    btnLabel.textContent     = 'Pause';
+    iconPlay.style.display   = 'none';
+    iconPause.style.display  = 'block';
     btnStart.classList.add('paused');
   } else {
-    btnStart.disabled = false;
-    btnLabel.textContent = animPaused ? 'Resume' : 'Start';
-    iconPlay.style.display  = 'block';
-    iconPause.style.display = 'none';
+    btnStart.disabled        = false;
+    btnLabel.textContent     = animPaused ? 'Resume' : 'Start';
+    iconPlay.style.display   = 'block';
+    iconPause.style.display  = 'none';
     btnStart.classList.remove('paused');
   }
 }
-
+ 
 function setStatus(text, cls) {
   infoStatus.textContent = text;
   infoStatus.className   = 'info-value ' + cls;
 }
-
+ 
 function updateProgressBar(pct) {
   progressBar.style.width = pct + '%';
 }
-
+ 
 // ============================================================
 //  BAGIAN 13: ZOOM & PAN
 //
@@ -1443,63 +1519,70 @@ function updateProgressBar(pct) {
 //  tiga layer secara bersamaan. Pivot dihitung agar posisi
 //  di bawah kursor/tengah layar tidak bergeser.
 // ============================================================
-
+ 
 function zoomAt(pivotX, pivotY, delta) {
   const newScale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, camScale + delta));
   if (newScale === camScale) return;
   const factor = newScale / camScale;
-  camOffX = pivotX - factor * (pivotX - camOffX);
-  camOffY = pivotY - factor * (pivotY - camOffY);
+  camOffX  = pivotX - factor * (pivotX - camOffX);
+  camOffY  = pivotY - factor * (pivotY - camOffY);
   camScale = newScale;
   applyTransform();
 }
-
+ 
 // ============================================================
 //  BAGIAN 14: EVENT LISTENERS
 // ============================================================
-
+ 
 document.getElementById('btnRandomMap').addEventListener('click', () => {
   generateMap();
 });
-
+ 
 document.getElementById('btnRandomPos').addEventListener('click', () => {
   if (!mapReady) { alert('Generate map dulu!'); return; }
   randomPosition();
 });
-
+ 
 btnStart.addEventListener('click', () => {
   if (animRunning) {
     pauseAnimation();
   } else {
     startAnimation();
-    setStatus('Running', 'status-running');
+    // Hanya set status 'Running' jika animasi benar-benar bisa dimulai
+    if (animRunning) setStatus('Running', 'status-running');
   }
 });
-
+ 
 document.getElementById('btnReset').addEventListener('click', () => {
   stopAnimation();
   if (posReady && pathPoints.length > 0) {
-    carPtIndex  = 0;
-    carX = pathPoints[0].x;
-    carY = pathPoints[0].y;
-    carAngle = 0;
+    carPtIndex = 0;
+    carX       = pathPoints[0].x;
+    carY       = pathPoints[0].y;
+    // Orientasi awal menghadap titik pertama — sama seperti saat start
+    if (pathPoints.length >= 2) {
+      const dx = pathPoints[1].x - pathPoints[0].x;
+      const dy = pathPoints[1].y - pathPoints[0].y;
+      carAngle = Math.atan2(dy, dx);
+    } else {
+      carAngle = 0;
+    }
     animPaused = false;
-    updateProgressBar(0);
-    infoProgress.textContent = '0%';
+    _updateProgress(0);
     setStatus('Ready', 'status-ready');
     updateUI();
     drawForeground();
   }
 });
-
+ 
 document.getElementById('btnZoomIn').addEventListener('click', () => {
-  zoomAt(wrapper.clientWidth/2, wrapper.clientHeight/2,  SCALE_STEP);
+  zoomAt(wrapper.clientWidth / 2, wrapper.clientHeight / 2,  SCALE_STEP);
 });
-
+ 
 document.getElementById('btnZoomOut').addEventListener('click', () => {
-  zoomAt(wrapper.clientWidth/2, wrapper.clientHeight/2, -SCALE_STEP);
+  zoomAt(wrapper.clientWidth / 2, wrapper.clientHeight / 2, -SCALE_STEP);
 });
-
+ 
 // Scroll wheel zoom
 wrapper.addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -1507,7 +1590,7 @@ wrapper.addEventListener('wheel', (e) => {
   const rect  = wrapper.getBoundingClientRect();
   zoomAt(e.clientX - rect.left, e.clientY - rect.top, delta);
 }, { passive: false });
-
+ 
 // Mouse drag (pan)
 wrapper.addEventListener('mousedown', (e) => {
   isDragging  = true;
@@ -1523,8 +1606,10 @@ window.addEventListener('mousemove', (e) => {
   applyTransform();
 });
 window.addEventListener('mouseup', () => { isDragging = false; });
-
-// Touch drag (mobile pan)
+ 
+// Touch — pan (1 jari) + pinch-to-zoom (2 jari)
+let _touchPinchDist = 0; // jarak antar jari saat pinch mulai
+ 
 wrapper.addEventListener('touchstart', (e) => {
   if (e.touches.length === 1) {
     isDragging  = true;
@@ -1532,28 +1617,54 @@ wrapper.addEventListener('touchstart', (e) => {
     dragStartY  = e.touches[0].clientY;
     camOffXSnap = camOffX;
     camOffYSnap = camOffY;
+  } else if (e.touches.length === 2) {
+    // Mulai pinch: simpan jarak awal & matikan drag
+    isDragging      = false;
+    const dx        = e.touches[1].clientX - e.touches[0].clientX;
+    const dy        = e.touches[1].clientY - e.touches[0].clientY;
+    _touchPinchDist = Math.sqrt(dx*dx + dy*dy);
   }
 }, { passive: true });
+ 
 wrapper.addEventListener('touchmove', (e) => {
-  if (!isDragging || e.touches.length !== 1) return;
-  camOffX = camOffXSnap + (e.touches[0].clientX - dragStartX);
-  camOffY = camOffYSnap + (e.touches[0].clientY - dragStartY);
-  applyTransform();
+  if (e.touches.length === 1 && isDragging) {
+    camOffX = camOffXSnap + (e.touches[0].clientX - dragStartX);
+    camOffY = camOffYSnap + (e.touches[0].clientY - dragStartY);
+    applyTransform();
+  } else if (e.touches.length === 2 && _touchPinchDist > 0) {
+    const dx      = e.touches[1].clientX - e.touches[0].clientX;
+    const dy      = e.touches[1].clientY - e.touches[0].clientY;
+    const newDist = Math.sqrt(dx*dx + dy*dy);
+    const ratio   = newDist / _touchPinchDist;
+    _touchPinchDist = newDist;
+ 
+    // Pivot di tengah-tengah dua jari
+    const rect   = wrapper.getBoundingClientRect();
+    const pivotX = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+    const pivotY = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+    const delta  = (ratio - 1) * camScale;
+    zoomAt(pivotX, pivotY, delta);
+  }
 }, { passive: true });
-wrapper.addEventListener('touchend', () => { isDragging = false; });
-
-// Resize: pusatkan ulang kamera
+ 
+wrapper.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) _touchPinchDist = 0;
+  if (e.touches.length === 0) isDragging = false;
+});
+ 
+// Resize: perbarui batas skala, TANPA memaksa re-center
+// (kamera tetap di posisi terakhir pengguna)
 window.addEventListener('resize', () => {
   updateMinScale();
 });
-
+ 
 // ============================================================
 //  BAGIAN 15: UTILITY — Seeded Random Number Generator
 //
 //  Digunakan agar background (gedung, pohon) konsisten
 //  setiap render tanpa perlu disimpan.
 // ============================================================
-
+ 
 function seededRand(seed) {
   let s = seed;
   return function() {
@@ -1561,14 +1672,12 @@ function seededRand(seed) {
     return s / 233280;
   };
 }
-
+ 
 // ============================================================
 //  BAGIAN 16: INISIALISASI AWAL
 // ============================================================
-
+ 
 window.addEventListener('load', () => {
   initLayers();
   hint.classList.remove('hidden');
 });
-
-
