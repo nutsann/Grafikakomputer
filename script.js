@@ -1099,77 +1099,7 @@ function drawMarker(ctx, x, y, color, label) {
   ctx.fillText(label, x, y);
 }
 
-// -------- Gambar mobil top-view --------
-//  Mobil dirender dengan ctx.save/rotate/restore agar rotasi
-//  tidak mempengaruhi elemen lain. Sudut dari Math.atan2(dy,dx).
-function drawCar(ctx, cx, cy, angle) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(angle);
-
-  const W = 12, H = 22;  // Lebar & panjang mobil
-
-  // Bayangan mobil
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur  = 8;
-  ctx.shadowOffsetY = 3;
-
-  // Badan utama
-  ctx.fillStyle = '#cc2222';
-  roundRectPath(ctx, -W/2, -H/2, W, H, 3);
-  ctx.fill();
-
-  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-
-  // Garis tepi badan
-  ctx.strokeStyle = '#880000';
-  ctx.lineWidth = 1;
-  roundRectPath(ctx, -W/2, -H/2, W, H, 3);
-  ctx.stroke();
-
-  // Atap
-  ctx.fillStyle = '#aa1111';
-  roundRectPath(ctx, -W*0.35, -H*0.28, W*0.7, H*0.42, 2);
-  ctx.fill();
-
-  // Kaca depan
-  ctx.fillStyle = 'rgba(136,204,255,0.85)';
-  roundRectPath(ctx, -W*0.28, -H*0.25, W*0.56, H*0.18, 2);
-  ctx.fill();
-
-  // Kaca belakang
-  roundRectPath(ctx, -W*0.28, H*0.08, W*0.56, H*0.16, 2);
-  ctx.fill();
-
-  // Lampu depan
-  ctx.fillStyle = '#ffffaa';
-  ctx.fillRect(-W/2+2, -H/2+2, W*0.22, H*0.09);
-  ctx.fillRect( W/2-W*0.22-2, -H/2+2, W*0.22, H*0.09);
-
-  // Roda (4 buah)
-  ctx.fillStyle = '#111';
-  const wx = W/2 - 1, wy = H/2 - 4;
-  ctx.fillRect(-wx-3, -wy,    3, 7);  // Kiri depan
-  ctx.fillRect( wx,   -wy,    3, 7);  // Kanan depan
-  ctx.fillRect(-wx-3,  wy-7,  3, 7);  // Kiri belakang
-  ctx.fillRect( wx,    wy-7,  3, 7);  // Kanan belakang
-
-  ctx.restore();
-}
-
-function roundRectPath(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x+w, y,   x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x,   y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x,   y,   x+r, y);
-  ctx.closePath();
-}
+https://github.com/nutsann/Grafikakomputer.git
 
 // ============================================================
 //  BAGIAN 9: RANDOM POSITION
